@@ -17,6 +17,8 @@ interface FormData {
   categories: string[]
   inStock: boolean
   description: string
+  image?: File | null
+  imagePreview?: string
 }
 
 interface FormErrors {
@@ -24,6 +26,7 @@ interface FormErrors {
   price?: string
   categories?: string
   general?: string
+  image?: string
 }
 
 export function AdminPlantForm() {
@@ -33,6 +36,8 @@ export function AdminPlantForm() {
     categories: [],
     inStock: true,
     description: "",
+    image: null,
+    imagePreview: ""
   })
 
   const [categoryInput, setCategoryInput] = useState("")
@@ -98,6 +103,21 @@ export function AdminPlantForm() {
     }
   }
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setFormData((prev) => ({
+        ...prev,
+        image: file,
+        imagePreview: URL.createObjectURL(file)
+      }))
+      // Clear image error if it exists
+      if (errors.image) {
+        setErrors((prev) => ({ ...prev, image: undefined }))
+      }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitSuccess(false)
@@ -110,6 +130,26 @@ export function AdminPlantForm() {
     setErrors({})
 
     try {
+      // First upload the image if present
+      let imageUrl = ''
+      if (formData.image) {
+        const formDataToUpload = new FormData()
+        formDataToUpload.append('file', formData.image)
+        
+        const uploadResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: formDataToUpload,
+        })
+
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload image')
+        }
+
+        const { url } = await uploadResponse.json()
+        imageUrl = url
+      }
+
+      // Then create the plant with the image URL
       const response = await fetch("/api/plants", {
         method: "POST",
         headers: {
@@ -121,6 +161,7 @@ export function AdminPlantForm() {
           categories: formData.categories,
           inStock: formData.inStock,
           description: formData.description.trim(),
+          image: imageUrl
         }),
       })
 
@@ -135,6 +176,8 @@ export function AdminPlantForm() {
         categories: [],
         inStock: true,
         description: "",
+        image: null,
+        imagePreview: ""
       })
       setSubmitSuccess(true)
 
@@ -142,7 +185,7 @@ export function AdminPlantForm() {
       setTimeout(() => setSubmitSuccess(false), 3000)
     } catch (error) {
       console.error("Error adding plant:", error)
-      setErrors({ general: "Failed to add plant. Please try again." })
+      setErrors({ general: error instanceof Error ? error.message : "Failed to add plant. Please try again." })
     } finally {
       setIsSubmitting(false)
     }
@@ -243,6 +286,44 @@ export function AdminPlantForm() {
             <p className="text-sm text-muted-foreground">
               Type a category and press Enter or click + to add. You can add multiple categories.
             </p>
+          </div>
+
+          {/* Image Upload */}
+          <div className="space-y-2">
+            <Label htmlFor="image">Plant Image</Label>
+            <div className="flex items-center gap-4">
+              <div className="relative w-24 h-24 rounded-md overflow-hidden border border-dashed border-gray-300">
+                {formData.imagePreview ? (
+                  <img 
+                    src={formData.imagePreview} 
+                    alt="Preview" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
+                    <span>No image</span>
+                  </div>
+                )}
+              </div>
+              <div>
+                <Input
+                  id="image"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+                <Label 
+                  htmlFor="image" 
+                  className="cursor-pointer inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90"
+                >
+                  {formData.imagePreview ? 'Change Image' : 'Upload Image'}
+                </Label>
+                {errors.image && (
+                  <p className="mt-1 text-sm text-red-600">{errors.image}</p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Description */}
