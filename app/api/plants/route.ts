@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const client = new MongoClient(uri, {
     serverApi: {
       version: '1',
-      strict: true,
+      strict: false,
       deprecationErrors: true,
     },
     tls: true,
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
   const client = new MongoClient(uri, {
     serverApi: {
       version: '1',
-      strict: true,
+      strict: false,
       deprecationErrors: true,
     },
     tls: true,
