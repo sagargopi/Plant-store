@@ -1,25 +1,44 @@
-import { type NextRequest, NextResponse } from "next/server"
-import clientPromise from "@/lib/mongodb"
-import type { Plant } from "@/lib/models/Plant"
+import { type NextRequest, NextResponse } from "next/server";
+import { MongoClient } from 'mongodb';
+import type { Plant } from "@/lib/models/Plant";
+
+const uri = process.env.MONGODB_URI;
 
 export async function GET(request: NextRequest) {
+  if (!uri) {
+    return NextResponse.json(
+      { error: "MongoDB connection string is not configured" },
+      { status: 500 }
+    );
+  }
+
+  const client = new MongoClient(uri, {
+    serverApi: {
+      version: '1',
+      strict: true,
+      deprecationErrors: true,
+    },
+    tls: true,
+    tlsAllowInvalidCertificates: true,
+  });
+
   try {
-    console.log("[v0] Attempting to connect to MongoDB...")
-    const client = await clientPromise
-    console.log("[v0] MongoDB connection successful")
+    await client.connect();
+    const db = client.db("plant_store");
+    const { searchParams } = new URL(request.url);
 
-    const db = client.db("plant_store")
-    const { searchParams } = new URL(request.url)
-
-    const search = searchParams.get("search")
-    const category = searchParams.get("category")
-    const inStock = searchParams.get("inStock")
+    const search = searchParams.get("search");
+    const category = searchParams.get("category");
+    const inStock = searchParams.get("inStock");
 
     // Build MongoDB query
-    const query: any = {}
+    const query: any = {};
 
     if (search) {
-      query.$or = [{ name: { $regex: search, $options: "i" } }, { categories: { $regex: search, $options: "i" } }]
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { categories: { $regex: search, $options: "i" } }
+      ];
     }
 
     if (category && category !== "all") {
@@ -27,36 +46,45 @@ export async function GET(request: NextRequest) {
     }
 
     if (inStock === "true") {
-      query.inStock = { $ne: false }
+      query.inStock = { $ne: false };
     }
 
-    console.log("[v0] MongoDB query:", JSON.stringify(query, null, 2))
-    const plants = await db.collection("plants").find(query).toArray()
-    console.log("[v0] Found plants:", plants.length)
-    
-    // Debug: Log first plant's data
-    if (plants.length > 0) {
-      console.log("[v0] First plant data:", {
-        name: plants[0].name,
-        image: plants[0].image,
-        hasImage: !!plants[0].image,
-        allFields: Object.keys(plants[0])
-      })
-    }
-
-    return NextResponse.json({ plants })
+    const plants = await db.collection<Plant>("plants").find(query).toArray();
+    return NextResponse.json({ plants });
   } catch (error) {
-    console.error("[v0] Error fetching plants:", error)
-    return NextResponse.json({ error: "Failed to fetch plants" }, { status: 500 })
+    console.error("Error fetching plants:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch plants" },
+      { status: 500 }
+    );
+  } finally {
+    await client.close();
   }
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const client = await clientPromise
-    const db = client.db("plant_store")
-    const body = await request.json()
+  if (!uri) {
+    return NextResponse.json(
+      { error: "MongoDB connection string is not configured" },
+      { status: 500 }
+    );
+  }
 
+  const client = new MongoClient(uri, {
+    serverApi: {
+      version: '1',
+      strict: true,
+      deprecationErrors: true,
+    },
+    tls: true,
+    tlsAllowInvalidCertificates: true,
+  });
+
+  try {
+    const body = await request.json();
+    await client.connect();
+    const db = client.db("plant_store");
+    
     const plant: Plant = {
       name: body.name,
       price: Number.parseFloat(body.price),
@@ -68,14 +96,18 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date(),
     }
 
-    const result = await db.collection("plants").insertOne(plant)
-
+    const result = await db.collection<Plant>("plants").insertOne(plant);
     return NextResponse.json({
       success: true,
       plantId: result.insertedId,
-    })
+    }, { status: 201 });
   } catch (error) {
-    console.error("Error adding plant:", error)
-    return NextResponse.json({ error: "Failed to add plant" }, { status: 500 })
+    console.error("Error creating plant:", error);
+    return NextResponse.json(
+      { error: "Failed to create plant" },
+      { status: 500 }
+    );
+  } finally {
+    await client.close();
   }
 }
