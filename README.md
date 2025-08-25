@@ -226,5 +226,3 @@ This project was built as part of the Urvann internship assignment. The codebase
 This project is created for the Urvann Software Development Intern Assignment.
 
 ---
-
-**Built with ❤️ for Urvann Plant Store Assignment**
